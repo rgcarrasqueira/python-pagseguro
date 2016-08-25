@@ -2,12 +2,11 @@ python-pagseguro
 ================
 [![Build
 Status](https://travis-ci.org/rochacbruno/python-pagseguro.png)](https://travis-ci.org/rochacbruno/python-pagseguro)
-[![Build
-Status](https://drone.io/github.com/rochacbruno/python-pagseguro/status.png)](https://drone.io/github.com/rochacbruno/python-pagseguro/latest)
 [![Coverage
 Status](https://coveralls.io/repos/rochacbruno/python-pagseguro/badge.png)](https://coveralls.io/r/rochacbruno/python-pagseguro)
 [![Code Health](https://landscape.io/github/rochacbruno/python-pagseguro/master/landscape.svg)](https://landscape.io/github/rochacbruno/python-pagseguro/master)
 
+<a target="_blank" href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&amp;business=rochacbruno%40gmail%2ecom&amp;lc=BR&amp;item_name=pythonpagseguro&amp;no_note=0&amp;currency_code=BRL&amp;bn=PP%2dDonationsBF%3abtn_donate_SM%2egif%3aNonHostedGuest"><img alt='Donate with Paypal' src='http://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif' /></a>
 
 Integração com a API v2 de pagamentos e notificações do Pagseguro utilizando requests.
 
@@ -54,6 +53,30 @@ from pagseguro import PagSeguro
 
 pg = PagSeguro(email="seuemail@dominio.com", token="ABCDEFGHIJKLMNO")
 ```
+
+### Sandbox e Config Customizadas
+
+Ao instanciar um objecto `PagSeguro`, você poderá passar um parâmetro `config` contendo a class de configuração a ser usada pela classe. A lib implementa 2 classes, uma para ser usada em produção e outra em modo sandbox. Abaixo, um exemplo de como usar a lib em modo Sandbox.
+
+```python
+from pagseguro import PagSeguro, ConfigSandbox
+
+pg = PagSeguro(email="seuemail@dominio.com", token="ABCDEFGHIJKLMNO", config=ConfigSandbox())
+```
+
+Caso queira criar sua própria classe de Config, crie uma class herdando de `AbstractConfig` e adicione as variáveis necessárias
+
+Ex:
+
+```python
+from pagseguro import AbstractConfig
+
+class MinhaClassConfig(AbstractConfig):
+	VAR1 = 'valor'
+	VAR2 = 'outro_valor'
+	...
+```
+
 
 ### Configurando os dados do comprador
 
