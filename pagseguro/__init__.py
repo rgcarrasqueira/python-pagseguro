@@ -3,18 +3,16 @@ import logging
 import requests
 import xmltodict
 
-from .configs import Config
-from .configs import AbstractConfig
+from .configs import Config, ConfigSandbox, AbstractConfig  # noqa
 from .utils import parse_date, is_valid_email, is_valid_cpf, is_valid_cnpj
 
 logger = logging.getLogger()
 
 
-class PagSeguroNotificationResponse(object):
+class XMLParser(object):
 
-    def __init__(self, xml, config=None):
+    def __init__(self, xml):
         self.xml = xml
-        self.config = config or {}
         self.errors = None
         self.parse_xml(xml)
 
@@ -25,163 +23,111 @@ class PagSeguroNotificationResponse(object):
         try:
             parsed = xmltodict.parse(xml, encoding="iso-8859-1")
         except Exception as e:
-            logger.debug(
-                "Cannot parse the returned xml '{0}' -> '{1}'".format(xml, e)
-            )
+            logger.debug('Cannot parse the returned xml "%s" -> "%s"', xml, e)
             parsed = {}
 
         if 'errors' in parsed:
             self.errors = parsed['errors']['error']
+
+        return parsed
+
+
+class PagSeguroNotificationResponse(XMLParser):
+
+    def __init__(self, xml, config=None):
+        super(PagSeguroNotificationResponse, self).__init__(xml)
+        self.config = config or {}
+
+    def parse_xml(self, xml):
+        parsed = super(PagSeguroNotificationResponse, self).parse_xml(xml)
+        if self.errors:
+            return
+        transaction = parsed.get('transaction', {})
+        for k, v in transaction.items():
+            setattr(self, k, v)
+
+
+class PagSeguroPreApprovalNotificationResponse(XMLParser):
+
+    def __init__(self, xml, config=None):
+        super(PagSeguroPreApprovalNotificationResponse, self).__init__(xml)
+        self.config = config or {}
+
+    def parse_xml(self, xml):
+        parsed = super(PagSeguroPreApprovalNotificationResponse,
+                       self).parse_xml(xml)
+        if self.errors:
+            return
+        transaction = parsed.get('transaction', {})
+        for k, v in transaction.items():
+            setattr(self, k, v)
+
+
+class PagSeguroPreApprovalCancel(XMLParser):
+
+    def __init__(self, xml, config=None):
+        super(PagSeguroPreApprovalCancel, self).__init__(xml)
+        self.config = config or {}
+
+    def parse_xml(self, xml):
+        parsed = super(PagSeguroPreApprovalCancel, self).parse_xml(xml)
+        if self.errors:
             return
 
         transaction = parsed.get('transaction', {})
-        for k, v in transaction.iteritems():
+        for k, v in transaction.items():
             setattr(self, k, v)
 
 
-class PagSeguroPreApprovalNotificationResponse(object):
+class PagSeguroCheckoutSession(XMLParser):
 
     def __init__(self, xml, config=None):
-        self.xml = xml
-        self.config = config or {}
-        self.errors = None
-        self.parse_xml(xml)
-
-    def __getitem__(self, key):
-        getattr(self, key, None)
-
-    def parse_xml(self, xml):
-        try:
-            parsed = xmltodict.parse(xml, encoding="iso-8859-1")
-        except Exception as e:
-            logger.debug(
-                "Cannot parse the returned xml '{0}' -> '{1}'".format(xml, e)
-            )
-            parsed = {}
-
-        if 'errors' in parsed:
-            self.errors = parsed['errors']['error']
-            return
-
-        transaction = parsed.get('preApproval', {})
-        for k, v in transaction.iteritems():
-            setattr(self, k, v)
-
-
-class PagSeguroPreApprovalCancel(object):
-
-    def __init__(self, xml, config=None):
-        self.xml = xml
-        self.config = config or {}
-        self.errors = None
-        self.parse_xml(xml)
-
-    def __getitem__(self, key):
-        getattr(self, key, None)
-
-    def parse_xml(self, xml):
-        try:
-            parsed = xmltodict.parse(xml, encoding="iso-8859-1")
-        except Exception as e:
-            logger.debug(
-                "Cannot parse the returned xml '{0}' -> '{1}'".format(xml, e)
-            )
-            parsed = {}
-
-        if 'errors' in parsed:
-            self.errors = parsed['errors']['error']
-            return
-
-        transaction = parsed.get('result', {})
-        for k, v in transaction.iteritems():
-            setattr(self, k, v)
-
-
-class PagSeguroCheckoutSession(object):
-
-    def __init__(self, xml, config=None):
-        self.xml = xml
         self.config = config or {}
         self.session_id = None
-        self.errors = None
         logger.debug(self.__dict__)
-        self.parse_xml(xml)
+        super(PagSeguroCheckoutSession, self).__init__(xml)
 
     def parse_xml(self, xml):
-
-        """ parse returned data """
-        try:
-            parsed = xmltodict.parse(xml, encoding="iso-8859-1")
-        except Exception as e:
-            logger.debug(
-                "Cannot parse the returned xml '{0}' -> '{1}'".format(xml, e)
-            )
-            parsed = {}
-
-        if 'errors' in parsed:
-            self.errors = parsed['errors']['error']
+        parsed = super(PagSeguroCheckoutSession, self).parse_xml(xml)
+        if self.errors:
             return
-
         session = parsed.get('session', {})
         self.session_id = session.get('id')
 
 
-class PagSeguroPreApprovalPayment(object):
+class PagSeguroPreApprovalPayment(XMLParser):
+
     def __init__(self, xml, config=None):
-        self.xml = xml
         self.config = config or {}
         self.code = None
-        self.errors = None
         logger.debug(self.__dict__)
-        self.parse_xml(xml)
+        super(PagSeguroPreApprovalPayment, self).__init__(xml)
 
     def parse_xml(self, xml):
-        """ parse returned data """
-        try:
-            parsed = xmltodict.parse(xml, encoding="iso-8859-1")
-        except Exception as e:
-            logger.debug(
-                "Cannot parse the returned xml '{0}' -> '{1}'".format(xml, e)
-            )
-            parsed = {}
-
-        if 'errors' in parsed:
-            self.errors = parsed['errors']['error']
+        parsed = super(PagSeguroPreApprovalPayment, self).parse_xml(xml)
+        if self.errors:
             return
-
         result = parsed.get('result', {})
         self.code = result.get('transactionCode')
         self.date = parse_date(result.get('date'))
 
 
-class PagSeguroCheckoutResponse(object):
+class PagSeguroCheckoutResponse(XMLParser):
 
     def __init__(self, xml, config=None):
-        self.xml = xml
         self.config = config or {}
         self.code = None
         self.date = None
-        self.errors = None
         self.payment_url = None
         self.payment_link = None
         self.transaction = None
         logger.debug(self.__dict__)
-        self.parse_xml(xml)
+        super(PagSeguroCheckoutResponse, self).__init__(xml)
 
     def parse_xml(self, xml):
-        """ parse returned data """
-        try:
-            parsed = xmltodict.parse(xml, encoding="iso-8859-1")
-        except Exception as e:
-            logger.debug(
-                "Cannot parse the returned xml '{0}' -> '{1}'".format(xml, e)
-            )
-            parsed = {}
-
-        if 'errors' in parsed:
-            self.errors = parsed['errors']['error']
+        parsed = super(PagSeguroCheckoutResponse, self).parse_xml(xml)
+        if self.errors:
             return
-
         checkout = parsed.get('checkout', {})
         self.code = checkout.get('code')
         self.date = parse_date(checkout.get('date'))
@@ -194,7 +140,7 @@ class PagSeguroCheckoutResponse(object):
         self.payment_link = self.transaction.get('paymentLink')
 
 
-class PagSeguroTransactionSearchResult(object):
+class PagSeguroTransactionSearchResult(XMLParser):
 
     current_page = None
     total_pages = None
@@ -202,22 +148,13 @@ class PagSeguroTransactionSearchResult(object):
     transactions = []
 
     def __init__(self, xml, config=None):
-        self.xml = xml
         self.config = config or {}
-        self.parse_xml(xml)
-
-    def __getitem__(self, key):
-        getattr(self, key, None)
+        super(PagSeguroTransactionSearchResult, self).__init__(xml)
 
     def parse_xml(self, xml):
-        try:
-            parsed = xmltodict.parse(xml, encoding="iso-8859-1")
-        except Exception as e:
-            logger.debug(
-                "Cannot parse the returned xml '{0}' -> '{1}'".format(xml, e)
-            )
-            parsed = {}
-
+        parsed = super(PagSeguroTransactionSearchResult, self).parse_xml(xml)
+        if self.errors:
+            return
         search_result = parsed.get('transactionSearchResult', {})
         self.transactions = search_result.get('transactions', {})
         self.transactions = self.transactions.get('transaction', [])
@@ -234,26 +171,16 @@ class PagSeguroTransactionSearchResult(object):
             self.total_pages = int(self.total_pages)
 
 
-class PagSeguroPreApproval(object):
+class PagSeguroPreApproval(XMLParser):
 
     def __init__(self, xml, config=None):
-        self.xml = xml
         self.config = config or {}
-        self.errors = None
-        self.parse_xml(xml)
-
-    def __getitem__(self, key):
-        getattr(self, key, None)
+        super(PagSeguroPreApproval, self).__init__(xml)
 
     def parse_xml(self, xml):
-        try:
-            parsed = xmltodict.parse(xml, encoding="iso-8859-1")
-        except Exception as e:
-            logger.debug(
-                "Cannot parse the returned xml '{0}' -> '{1}'".format(xml, e)
-            )
-            parsed = {}
-
+        parsed = super(PagSeguroPreApproval, self).parse_xml(xml)
+        if self.errors:
+            return
         result = parsed.get('preApproval', {})
         self.name = result.get('name', None)
         self.code = result.get('code', None)
@@ -266,7 +193,7 @@ class PagSeguroPreApproval(object):
         self.sender = result.get('sender', {})
 
 
-class PagSeguroPreApprovalSearch(object):
+class PagSeguroPreApprovalSearch(XMLParser):
 
     current_page = None
     total_pages = None
@@ -274,27 +201,13 @@ class PagSeguroPreApprovalSearch(object):
     pre_approvals = []
 
     def __init__(self, xml, config=None):
-        self.xml = xml
         self.config = config or {}
-        self.errors = None
-        self.parse_xml(xml)
-
-    def __getitem__(self, key):
-        getattr(self, key, None)
+        super(PagSeguroPreApprovalSearch, self).__init__(xml)
 
     def parse_xml(self, xml):
-        try:
-            parsed = xmltodict.parse(xml, encoding="iso-8859-1")
-        except Exception as e:
-            logger.debug(
-                "Cannot parse the returned xml '{0}' -> '{1}'".format(xml, e)
-            )
-            parsed = {}
-
-        if 'errors' in parsed:
-            self.errors = parsed['errors']['error']
+        parsed = super(PagSeguroPreApprovalSearch, self).parse_xml(xml)
+        if self.errors:
             return
-
         search_result = parsed.get('preApprovalSearchResult', {})
         self.pre_approvals = search_result.get('preApprovals', {})
         self.pre_approvals = self.pre_approvals.get('preApproval', [])
@@ -312,6 +225,7 @@ class PagSeguroPreApprovalSearch(object):
 
 
 class PagSeguro(object):
+
     """ Pag Seguro V2 wrapper """
 
     PAC = 1
@@ -360,17 +274,12 @@ class PagSeguro(object):
             params['shippingType'] = self.shipping.get('type')
             params['shippingAddressStreet'] = self.shipping.get('street')
             params['shippingAddressNumber'] = self.shipping.get('number')
-            params['shippingAddressComplement'] = self.shipping.get(
-                'complement'
-            )
+            params['shippingAddressComplement'] = self.shipping.get('complement')
             params['shippingAddressDistrict'] = self.shipping.get('district')
-            params['shippingAddressPostalCode'] = self.shipping.get(
-                'postal_code'
-            )
+            params['shippingAddressPostalCode'] = self.shipping.get('postal_code')
             params['shippingAddressCity'] = self.shipping.get('city')
             params['shippingAddressState'] = self.shipping.get('state')
-            params['shippingAddressCountry'] = self.shipping.get('country',
-                                                                 'BRA')
+            params['shippingAddressCountry'] = self.shipping.get('country', 'BRA')
 
         if self.shipping and self.shipping.get('cost'):
             params['shippingCost'] = self.shipping.get('cost')
@@ -405,44 +314,56 @@ class PagSeguro(object):
 
         if self.credit_card:
 
-            params['creditCardToken'] = self.credit_card.get('credit_card_token')
-            params['installmentQuantity'] = self.credit_card.get('installment_quantity')
-            params['installmentValue'] = self.credit_card.get('installment_value')
-            params['noInterestInstallmentQuantity'] = self.credit_card.get('no_interest_installment_quantity')
-            params['creditCardHolderName'] = self.credit_card.get('card_holder_name')
-            params['creditCardHolderCPF'] = self.credit_card.get('card_holder_cpf')
-            params['creditCardHolderBirthDate'] = self.credit_card.get('card_holder_birth_date')
-            params['creditCardHolderAreaCode'] = self.credit_card.get('card_holder_area_code')
-            params['creditCardHolderPhone'] = self.credit_card.get('card_holder_phone')
-            params['billingAddressStreet'] = self.credit_card.get('billing_address_street')
-            params['billingAddressNumber'] = self.credit_card.get('billing_address_number')
-            params['billingAddressComplement'] = self.credit_card.get('billing_address_complement')
-            params['billingAddressDistrict'] = self.credit_card.get('billing_address_district')
-            params['billingAddressPostalCode'] = self.credit_card.get('billing_address_postal_code')
-            params['billingAddressCity'] = self.credit_card.get('billing_address_city')
-            params['billingAddressState'] = self.credit_card.get('billing_address_state')
-            params['billingAddressCountry'] = 'BRA'
+            credit_card_keys_map = [
+                ('creditCardToken', 'credit_card_token'),
+                ('installmentQuantity', 'installment_quantity'),
+                ('installmentValue', 'installment_value'),
+                ('noInterestInstallmentQuantity',
+                 'no_interest_installment_quantity'),
+                ('creditCardHolderName', 'card_holder_name'),
+                ('creditCardHolderCPF', 'card_holder_cpf'),
+                ('creditCardHolderBirthDate', 'card_holder_birth_date'),
+                ('creditCardHolderAreaCode', 'card_holder_area_code'),
+                ('creditCardHolderPhone', 'card_holder_phone'),
+                ('billingAddressStreet', 'billing_address_street'),
+                ('billingAddressNumber', 'billing_address_number'),
+                ('billingAddressComplement', 'billing_address_complement'),
+                ('billingAddressDistrict', 'billing_address_district'),
+                ('billingAddressPostalCode', 'billing_address_postal_code'),
+                ('billingAddressCity', 'billing_address_city'),
+                ('billingAddressState', 'billing_address_state'),
+            ]
+
+            for key_to_set, key_to_get in credit_card_keys_map:
+                params[key_to_set] = self.credit_card.get(key_to_get)
 
         if self.pre_approval:
 
             params['preApprovalCharge'] = self.pre_approval.get('charge')
             params['preApprovalName'] = self.pre_approval.get('name')
             params['preApprovalDetails'] = self.pre_approval.get('details')
-            params['preApprovalAmountPerPayment'] = self.pre_approval.get('amount_per_payment')
-            params['preApprovalMaxAmountPerPayment'] = self.pre_approval.get('max_amount_per_payment')
-            params['preApprovalPeriod']= self.pre_approval.get('period')
-            params['preApprovalMaxPaymentsPerPeriod']= self.pre_approval.get('max_payments_per_period')
-            params['preApprovalMaxAmountPerPeriod']= self.pre_approval.get('max_amount_per_period')
-            params['preApprovalInitialDate']= self.pre_approval.get('initial_date')
-            params['preApprovalFinalDate']= self.pre_approval.get('final_date')
-            params['preApprovalMaxTotalAmount'] = self.pre_approval.get('max_total_amount')
+            params['preApprovalAmountPerPayment'] = self.pre_approval.get(
+                'amount_per_payment')
+            params['preApprovalMaxAmountPerPayment'] = self.pre_approval.get(
+                'max_amount_per_payment')
+            params['preApprovalPeriod'] = self.pre_approval.get('period')
+            params['preApprovalMaxPaymentsPerPeriod'] = self.pre_approval.get(
+                'max_payments_per_period')
+            params['preApprovalMaxAmountPerPeriod'] = self.pre_approval.get(
+                'max_amount_per_period')
+            params['preApprovalInitialDate'] = self.pre_approval.get(
+                'initial_date')
+            params['preApprovalFinalDate'] = self.pre_approval.get(
+                'final_date')
+            params['preApprovalMaxTotalAmount'] = self.pre_approval.get(
+                'max_total_amount')
 
         self.data.update(params)
         self.clean_none_params()
 
     def build_pre_approval_payment_params(self, **kwargs):
-
         """ build a dict with params """
+
         params = kwargs or {}
 
         params['reference'] = self.reference
@@ -461,7 +382,7 @@ class PagSeguro(object):
 
     def clean_none_params(self):
         copy = dict(self.data)
-        for k, v in copy.iteritems():
+        for k, v in list(copy.items()):
             if not v:
                 del self.data[k]
 
@@ -479,7 +400,7 @@ class PagSeguro(object):
 
     @reference.setter
     def reference(self, value):
-        if not isinstance(value, (str, unicode)):
+        if not isinstance(value, str):
             value = str(value)
         if value.startswith(self.reference_prefix):
             value = value[len(self.reference_prefix):]
@@ -503,9 +424,10 @@ class PagSeguro(object):
             response = self.post(url=self.config.CHECKOUT_URL)
         return PagSeguroCheckoutResponse(response.content, config=self.config)
 
-    def transparent_checkout_session(self, **kwargs):
+    def transparent_checkout_session(self):
         response = self.post(url=self.config.SESSION_CHECKOUT_URL)
-        return PagSeguroCheckoutSession(response.content, config=self.config).session_id
+        return PagSeguroCheckoutSession(response.content,
+                                        config=self.config).session_id
 
     def check_notification(self, code):
         """ check a notification by its code """
@@ -514,8 +436,10 @@ class PagSeguro(object):
 
     def check_pre_approval_notification(self, code):
         """ check a notification by its code """
-        response = self.get(url=self.config.PRE_APPROVAL_NOTIFICATION_URL % code)
-        return PagSeguroPreApprovalNotificationResponse(response.content, self.config)
+        response = self.get(
+            url=self.config.PRE_APPROVAL_NOTIFICATION_URL % code)
+        return PagSeguroPreApprovalNotificationResponse(
+            response.content, self.config)
 
     def pre_approval_ask_payment(self, **kwargs):
         """ ask form a subscribe payment """
@@ -533,15 +457,15 @@ class PagSeguro(object):
         response = self.get(url=self.config.TRANSACTION_URL % code)
         return PagSeguroNotificationResponse(response.content, self.config)
 
-    def query_transactions(self, initial_date, final_date, page=None,
+    def query_transactions(self, initial_date, final_date,
+                           page=None,
                            max_results=None):
         """ query transaction by date range """
         last_page = False
         results = []
         while last_page is False:
             search_result = self._consume_query_transactions(
-                initial_date, final_date, page, max_results
-            )
+                initial_date, final_date, page, max_results)
             results.extend(search_result.transactions)
             if search_result.current_page is None or \
                search_result.total_pages is None or \
@@ -552,7 +476,8 @@ class PagSeguro(object):
 
         return results
 
-    def _consume_query_transactions(self, initial_date, final_date, page=None,
+    def _consume_query_transactions(self, initial_date, final_date,
+                                    page=None,
                                     max_results=None):
         querystring = {
             'initialDate': initial_date.strftime('%Y-%m-%dT%H:%M'),
@@ -566,14 +491,13 @@ class PagSeguro(object):
         return PagSeguroTransactionSearchResult(response.content, self.config)
 
     def query_pre_approvals(self, initial_date, final_date, page=None,
-                           max_results=None):
+                            max_results=None):
         """ query pre-approvals by date range """
         last_page = False
         results = []
         while last_page is False:
             search_result = self._consume_query_pre_approvals(
-                initial_date, final_date, page, max_results
-            )
+                initial_date, final_date, page, max_results)
             results.extend(search_result.pre_approvals)
             if search_result.current_page is None or \
                search_result.total_pages is None or \
@@ -585,7 +509,7 @@ class PagSeguro(object):
         return results
 
     def _consume_query_pre_approvals(self, initial_date, final_date, page=None,
-                                    max_results=None):
+                                     max_results=None):
         querystring = {
             'initialDate': initial_date.strftime('%Y-%m-%dT%H:%M'),
             'finalDate': final_date.strftime('%Y-%m-%dT%H:%M'),
@@ -607,7 +531,9 @@ class PagSeguro(object):
 
     def _consume_query_pre_approvals_by_code(self, code):
 
-        response = self.get(url='%s/%s' % (self.config.QUERY_PRE_APPROVAL_URL, code))
+        response = self.get(
+            url='%s/%s' % (self.config.QUERY_PRE_APPROVAL_URL, code)
+        )
         return PagSeguroPreApproval(response.content, self.config)
 
     def add_item(self, **kwargs):

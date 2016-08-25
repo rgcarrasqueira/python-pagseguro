@@ -2,21 +2,21 @@
 import pytest
 
 from pagseguro import PagSeguro, PagSeguroTransactionSearchResult
-from pagseguro.configs import Config
+from pagseguro.configs import ConfigSandbox
 from pagseguro.exceptions import PagSeguroValidationError
 from pagseguro.utils import is_valid_email, is_valid_cpf
 
-TOKEN = '123456'
-EMAIL = 'seu@email.com'
+TOKEN = 'sandbox_token'
+EMAIL = 'pagseguro_email'
 
 
 @pytest.fixture
-def pagseguro():
-    return PagSeguro(token=TOKEN, email=EMAIL)
+def pagseguro_sandbox():
+    return PagSeguro(token=TOKEN, email=EMAIL, config=ConfigSandbox())
 
 
 @pytest.fixture
-def xml():
+def xml_sandbox():
     return """
 <transactionSearchResult>
     <date>2011-02-16T20:14:35.000-02:00</date>
@@ -60,39 +60,38 @@ def xml():
 </transactionSearchResult>"""
 
 
-def test_pagseguro_class(pagseguro):
-    assert isinstance(pagseguro, PagSeguro)
+def test_pagseguro_class(pagseguro_sandbox):
+    assert isinstance(pagseguro_sandbox, PagSeguro)
 
 
-def test_pagseguro_initial_attrs(pagseguro):
-    assert isinstance(pagseguro.config, Config)
-    assert isinstance(pagseguro.data, dict)
-    assert 'email' in pagseguro.data
-    assert 'token' in pagseguro.data
-    assert pagseguro.data['email'] == EMAIL
-    assert pagseguro.data['token'] == TOKEN
-    assert isinstance(pagseguro.items, list)
-    assert isinstance(pagseguro.sender, dict)
-    assert isinstance(pagseguro.shipping, dict)
-    assert pagseguro._reference == ''
-    assert pagseguro.extra_amount is None
-    assert pagseguro.redirect_url is None
-    assert pagseguro.notification_url is None
-    assert pagseguro.abandon_url is None
+def test_pagseguro_initial_attrs(pagseguro_sandbox):
+    assert isinstance(pagseguro_sandbox.config, ConfigSandbox)
+    assert isinstance(pagseguro_sandbox.data, dict)
+    assert 'email' in pagseguro_sandbox.data
+    assert 'token' in pagseguro_sandbox.data
+    assert pagseguro_sandbox.data['email'] == EMAIL
+    assert pagseguro_sandbox.data['token'] == TOKEN
+    assert isinstance(pagseguro_sandbox.items, list)
+    assert isinstance(pagseguro_sandbox.sender, dict)
+    assert isinstance(pagseguro_sandbox.shipping, dict)
+    assert pagseguro_sandbox._reference == ''
+    assert pagseguro_sandbox.extra_amount is None
+    assert pagseguro_sandbox.redirect_url is None
+    assert pagseguro_sandbox.notification_url is None
+    assert pagseguro_sandbox.abandon_url is None
 
 
-def test_build_checkout_params_with_all_params(pagseguro, sender, shipping,
-                                               items):
-    pagseguro.sender = sender
-    pagseguro.shipping = shipping
-    pagseguro.extra_amount = 12.50
-    pagseguro.redirect_url = '/redirecionando/'
-    pagseguro.abandon_url = '/abandonando/'
-    pagseguro.items = items
-    pagseguro.build_checkout_params()
-
+def test_build_checkout_params_with_all_params(pagseguro_sandbox, sender,
+                                               shipping, items):
+    pagseguro_sandbox.sender = sender
+    pagseguro_sandbox.shipping = shipping
+    pagseguro_sandbox.extra_amount = 12.50
+    pagseguro_sandbox.redirect_url = '/redirecionando/'
+    pagseguro_sandbox.abandon_url = '/abandonando/'
+    pagseguro_sandbox.items = items
+    pagseguro_sandbox.build_checkout_params()
     # check all data fields
-    assert isinstance(pagseguro.data, dict)
+    assert isinstance(pagseguro_sandbox.data, dict)
     keys = ['email', 'token', 'senderName', 'senderAreaCode',
             'senderPhone', 'senderEmail', 'senderCPF', 'senderBornDate',
             'shippingType', 'shippingAddressStreet',
@@ -101,29 +100,33 @@ def test_build_checkout_params_with_all_params(pagseguro, sender, shipping,
             'shippingAddressCity', 'shippingAddressState',
             'shippingAddressCountry', 'shippingCost', 'extraAmount',
             'redirectURL', 'abandonURL']
+
     # items
     item_keys = ['itemId{}', 'itemDescription{}', 'itemAmount{}',
                  'itemQuantity{}', 'itemWeight{}']
 
-    for key in keys:
-        assert key in pagseguro.data
+    import pprint
+    pprint.pprint(pagseguro_sandbox.data)
 
-    for i, key in enumerate(pagseguro.items, 1):
+    for key in keys:
+        assert key in pagseguro_sandbox.data
+
+    for i, key in enumerate(pagseguro_sandbox.items, 1):
         keys_to_compare = map(lambda x: x.format(i), item_keys)
         for item_key in keys_to_compare:
-            assert item_key in pagseguro.data
+            assert item_key in pagseguro_sandbox.data
 
 
 def test_add_items_util(items):
-    pagseguro = PagSeguro(token=TOKEN, email=EMAIL)
+    pagseguro = PagSeguro(email=EMAIL, token=TOKEN)
     pagseguro.add_item(**items[0])
     pagseguro.add_item(**items[1])
     assert len(pagseguro.items) == 2
 
 
-def test_reference(pagseguro):
-    pagseguro.reference = '12345'
-    assert unicode(pagseguro.reference) == u'REF12345'
+def test_reference(pagseguro_sandbox):
+    pagseguro_sandbox.reference = '12345'
+    assert str(pagseguro_sandbox.reference) == u'REF12345'
 
 
 def test_clean_none_params(sender):
@@ -154,7 +157,6 @@ def test_is_valid_cpf():
     bad_cpf = '123.456.267-45'
     pagseguro = PagSeguro(email=EMAIL, token=TOKEN)
     pagseguro.sender = {'cpf': bad_cpf}
-
     with pytest.raises(PagSeguroValidationError):
         pagseguro.build_checkout_params()
 
@@ -166,9 +168,9 @@ def test_is_valid_cpf():
     assert is_valid_cpf(pagseguro.sender['cpf']) == pagseguro.sender['cpf']
 
 
-def test_parse_xml(xml):
-    pg = PagSeguro(email=EMAIL, token=TOKEN)
-    result = PagSeguroTransactionSearchResult(xml, pg.config)
+def test_parse_xml(xml_sandbox):
+    pg = PagSeguro(email='seu@email.com', token='123456')
+    result = PagSeguroTransactionSearchResult(xml_sandbox, pg.config)
     assert result.current_page == 1
     assert result.results_in_page == 2
     assert result.total_pages == 1
