@@ -332,6 +332,7 @@ class PagSeguro(object):
                 ('billingAddressPostalCode', 'billing_address_postal_code'),
                 ('billingAddressCity', 'billing_address_city'),
                 ('billingAddressState', 'billing_address_state'),
+                ('billingAddressCountry', 'billing_address_country'),
             ]
 
             for key_to_set, key_to_get in credit_card_keys_map:
