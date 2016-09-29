@@ -58,7 +58,11 @@ class PagSeguroPreApprovalNotificationResponse(XMLParser):
                        self).parse_xml(xml)
         if self.errors:
             return
-        transaction = parsed.get('transaction', {})
+        transaction = parsed.get('preApproval', {})
+
+        if not transaction:  # coliving with legacy
+            transaction = parsed.get('transaction', {})
+
         for k, v in transaction.items():
             setattr(self, k, v)
 
